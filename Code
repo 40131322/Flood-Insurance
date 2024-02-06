@@ -1,0 +1,705 @@
+install.packages("goftest")
+install.packages("dplyr")   
+install.packages("readxl")
+install.packages("moments")
+install.packages("ggplot2")
+install.packages("fitdistrplus")
+install.packages("actuar")
+install.packages("EnvStats")
+install.packages("ParetoPosStable")
+install.packages("pracma")
+install.packages("e1071")
+install.packages("stats4")
+install.packages("ADGofTest")
+install.packages("FAdist")
+install.packages("fBasics")
+install.packages("matlib")
+install.packages("openxlsx")
+
+library(goftest)
+library(ggplot2)
+library(dplyr)               
+library(moments)
+library(readxl)
+library(actuar)
+library(ADGofTest)
+library(fitdistrplus)
+library(EnvStats)
+library(ParetoPosStable)
+library(pracma)
+library(e1071)
+library(stats4)
+library(FAdist)
+library(fBasics)
+library(matlib)
+library(openxlsx)
+
+#Base
+FloodInsurance = read_xlsx("/Users/cheng/Documents/floodinsurance.xlsx",sheet = )
+Base.FloodInsurance<- FloodInsurance %>% filter(N!=2) 
+Base.FloodInsurance<- Base.FloodInsurance$`Claim X`
+sorted.Base.FloodInsurance<-sort(Base.FloodInsurance)
+
+
+#Log Transformed
+log.FloodInsurance<-log(Base.FloodInsurance)
+sorted.log.FloodInsurance<-sort(log(Base.FloodInsurance))
+
+#Parameters
+mean(Base.FloodInsurance)
+range(Base.FloodInsurance)
+median(Base.FloodInsurance)
+var(Base.FloodInsurance)
+sd(Base.FloodInsurance)
+mean(log.FloodInsurance)
+range(log.FloodInsurance)
+median(log.FloodInsurance)
+var(log.FloodInsurance)
+sd(log.FloodInsurance)
+
+mean(log.FloodInsurance)
+var(log.FloodInsurance)
+
+# scatter plots
+plot(Base.FloodInsurance,main="Scatter Plot of Original Claim Amounts")
+plot(log.FloodInsurance,main="Scatter Plot of Log-Transformed Claim Amounts")
+
+#Quantiles
+quantile(Base.FloodInsurance, c(0.05, 0.1, 0.25, 0.5, 0.75, 0.9,0.95))
+quantile(log.FloodInsurance, c(0.05, 0.1, 0.25, 0.5, 0.75, 0.9,0.95))
+
+#Boxplot
+B<-boxplot(Base.FloodInsurance,xlab="Claim Amount",ylab="Frequency")
+BL<-boxplot(log.FloodInsurance,xlab="Log-Transformed Claim Amount",ylab="Frequency")
+
+#Coefficient of variation, skewness, kurtosis
+cv<-function(x){sd(x)/mean(x)}
+skew<-function(x){mean((x -mean(x))^3)/sd(x)^3}
+kurt<-function(x){mean((x-mean(x))^4)/sd(x)^4}
+cv(Base.FloodInsurance)
+cv(log.FloodInsurance)
+skew(Base.FloodInsurance)
+skew(log.FloodInsurance)
+kurt(Base.FloodInsurance)
+kurt(log.FloodInsurance)
+
+#Histograms
+hist (Base.FloodInsurance,
+      main="Histogram for Amount", xlab="Amount",las=1)
+hist (log.FloodInsurance, prob=T, breaks=seq(from=2, to =15, by=0.5),xlim=c(2,9), main="Histogram for Logged
+Amount", xlab="Amount",las=1)
+
+
+#Proceed with log transformed Data
+#Empirical CDF function
+cdf<- function(x){
+  a<-x
+  for(i in 1:length(x) ) { a[i]<-sum(x<=x[i])/length(x)
+  }
+  return(a)
+}
+amount.fn<-cdf(sorted.log.FloodInsurance)
+plot(sorted.log.FloodInsurance,amount.fn,type="s",xlab="Claims",ylab="F_n",main="Empirical vs. Fitted
+Normal CDF")
+
+#Empirical MRL function:
+emrl<- function(x){ a<-x
+x.Fn<-cdf(x)
+for(i in 1:length(x)) {(if(x[i]<max(x))(a[i]<-sum(x[x-x[i]>0]-x[i])/(length(x))/(1-x.Fn[i])) else
+  a[i]<-0) }
+return(a)}
+
+amount.mrl<-emrl(sorted.log.FloodInsurance)
+plot(sorted.log.FloodInsurance,amount.mrl,type="l",xlab="Claims",ylab="Mean Excess",main="Logged Empirical
+MRL")
+amount.base.mrl<-emrl(sorted.Base.FloodInsurance)
+plot(sorted.Base.FloodInsurance,amount.base.mrl,type="l",xlab="Claims",ylab="Mean Excess",main="Base Empirical
+MRL")
+
+#Empirical LEV
+amount.lev<-mean(sorted.log.FloodInsurance)-amount.mrl*(1-amount.fn)
+plot(sorted.log.FloodInsurance, amount.lev, type="l",xlab="Claims",ylab="Limited Expected Value",
+     main="Empirical LEV",las=1)
+
+#Empirical MRL and Empirical LEV:
+par(mfrow=c(1,2))
+plot(sorted.log.FloodInsurance,amount.mrl,type="l",xlab="Claims",ylab="Mean Excess",main="Empirical
+MRL")
+plot(sorted.log.FloodInsurance, amount.lev, type="l",xlab="Claims",ylab="Limited Expected
+Value",main="Empirical LEV",las=1)
+
+#test for independence
+par(mfrow=c(1,1))
+iid_test <- acf(x= log.FloodInsurance, type = "correlation")
+iid_test
+#seems to be a WN
+
+#Ljung-Box test
+test1 = Box.test(log.FloodInsurance,lag=5,type= "Ljung-Box")
+test2 = Box.test(log.FloodInsurance,lag=10,type= "Ljung-Box")
+test3 = Box.test(log.FloodInsurance,lag=15,type= "Ljung-Box")
+test1
+test2
+test3
+
+#Normal Q-Q plot
+par(mfrow=c(1,1))
+qqnorm(log.FloodInsurance)
+qqline(log.FloodInsurance)
+
+#P-P Plot
+y<-pnorm(sorted.log.FloodInsurance,mean(log.FloodInsurance),var(log.FloodInsurance))
+plot(amount.fn,y,type="p", main="P-P plot (normal)",
+     xlab="F_n (x)",ylab="F(x)")
+abline(a=0,b=1,col="red")
+
+#Fitting distributions: "mle"=maximum likelihood function "mme"=moment matching
+#"qme"=quantile matching "mge"=maximizing goodness-of -fit
+
+gamma_fit_mme <- fitdist(log.FloodInsurance, "gamma",method = c("mme"))
+normal_fit_mme <- fitdist(log.FloodInsurance, "norm",method = c("mme"))
+lognormal_fit_mme <- fitdist(log.FloodInsurance,"lnorm",method = c("mme"))
+logistic_fit_mme <- fitdist(log.FloodInsurance,"logis",method = c("mme"))
+
+gamma_fit <- fitdist(log.FloodInsurance, "gamma")
+weibull_fit <- fitdist(log.FloodInsurance, "weibull")
+normal_fit <- fitdist(log.FloodInsurance, "norm")
+lognormal_fit <- fitdist(log.FloodInsurance,"lnorm")
+logistic_fit <- fitdist(log.FloodInsurance,"logis")
+
+#Fitted parameters of gamma & cov matrix
+
+gamma_fit$estimate
+gamma_cov<-gamma_fit$vcov
+summary(gamma_fit)
+plot(gamma_fit)
+
+#Fitted parameters of Weibull & cov matrix
+
+weibull_fit$estimate
+weibull_cov<-weibull_fit$vcov
+summary(weibull_fit)
+plot(weibull_fit)
+
+#Fitted parameters of Normal & cov matrix
+
+normal_fit$estimate
+normal_cov<-normal_fit$vcov
+summary(normal_fit)
+plot(normal_fit)
+
+#Fitted parameters of lognormal & cov matrix
+
+lognormal_fit$estimate
+lognormal_cov<-lognormal_fit$vcov
+summary(lognormal_fit)
+plot(lognormal_fit)
+
+#Fitted parameters of Normal & cov matrix
+
+logistic_fit$estimate
+logistic_cov<-logistic_fit$vcov
+summary(logistic_fit)
+plot(logistic_fit)
+
+###GAMMA
+
+# cdf of fitted gamma dist
+gamma_fit_cdf <- function(x) pgamma(x, shape = gamma_fit$estimate["shape"], rate =
+                                      gamma_fit$estimate["rate"])
+# Survival function of fitted gamma dist
+gamma_fit_sf <- function(x) 1 - gamma_fit_cdf(x)
+# Density function of fitted gamma dist
+gamma_fit_dens <- function(x) dgamma(x, shape = gamma_fit$estimate["shape"], rate =
+                                       gamma_fit$estimate["rate"])
+# Lev of fitted gamma dist
+lev_gamma <- function(t) integrate(f = gamma_fit_sf, lower = 0, upper = t)$value
+# mrl of fitted gamma dist
+mrl_gamma <- function(t) (lev_gamma(Inf) - lev_gamma(t))/gamma_fit_sf(t)
+
+###WEIBULL
+weibull_fit
+# cdf of fitted weibull dist
+weibull_fit_cdf <- function(x) pweibull(x, shape = weibull_fit$estimate["shape"], scale =
+                                          weibull_fit$estimate["scale"])
+# Survival function of fitted weibull dist
+weibull_fit_sf <- function(x) 1 - weibull_fit_cdf(x)
+# Density function of fitted weibull dist
+weibull_fit_dens <- function(x) dweibull(x, shape = weibull_fit$estimate["shape"], scale =
+                                           weibull_fit$estimate["scale"])
+# Lev of fitted weibull dist
+lev_weibull <- function(t) integrate(f = weibull_fit_sf, lower = 0, upper = t)$value
+# mrl of fitted weibull dist
+mrl_weibull <- function(t) (lev_weibull(Inf) - lev_weibull(t))/weibull_fit_sf(t)
+
+###NORMAL
+
+# cdf of fitted normal dist
+normal_fit_cdf <- function(x) pnorm(x, mean = normal_fit$estimate["mean"], sd =
+                                      normal_fit$estimate["sd"])
+# Survival function of fitted normal dist
+normal_fit_sf <- function(x) 1 - normal_fit_cdf(x)
+# Density function of fitted normal dist
+normal_fit_dens <- function(x) dnorm(x, mean = normal_fit$estimate["mean"], sd =
+                                       normal_fit$estimate["sd"])
+# Lev of fitted normal dist
+lev_normal <- function(t) integrate(f = normal_fit_sf, lower = 0, upper = t)$value
+# mrl of fitted normal dist
+mrl_normal <- function(t) (lev_normal(Inf) - lev_normal(t))/normal_fit_sf(t)
+
+###LOGNORMAl
+
+(lognormal_fit)
+# cdf of fitted lognormal dist
+lognormal_fit_cdf <- function(x) plnorm(x, meanlog = lognormal_fit$estimate["meanlog"], sdlog =
+                                      lognormal_fit$estimate["sdlog"])
+# Survival function of fitted lognormal dist
+lognormal_fit_sf <- function(x) 1 - lognormal_fit_cdf(x)
+# Density function of fitted lognormal dist
+lognormal_fit_dens <- function(x) dlnorm(x, meanlog = lognormal_fit$estimate["meanlog"], sdlog =
+                                           lognormal_fit$estimate["sdlog"])
+# Lev of fitted lognormal dist
+lev_lognormal <- function(t) integrate(f = lognormal_fit_sf, lower = 0, upper = t)$value
+# mrl of fitted lognormal dist
+mrl_lognormal <- function(t) (lev_lognormal(Inf) - lev_lognormal(t))/lognormal_fit_sf(t)
+
+###LOGISTIC
+
+# cdf of fitted logistic dist
+logistic_fit_cdf <- function(x) plogis(x, location = logistic_fit$estimate["location"], scale =
+                                          logistic_fit$estimate["scale"])
+# Survival function of fitted logistic dist
+logistic_fit_sf <- function(x) 1 - logistic_fit_cdf(x)
+# Density function of fitted logistic dist
+logistic_fit_dens <- function(x) dlogis(x, location = logistic_fit$estimate["location"], scale =
+                                          logistic_fit$estimate["scale"])
+# Lev of fitted logistic dist
+lev_logistic <- function(t) integrate(f = logistic_fit_sf, lower = 0, upper = t)$value
+# mrl of fitted logistic dist
+mrl_logistic <- function(t) (lev_logistic(Inf) - lev_logistic(t))/logistic_fit_sf(t)
+
+
+
+# Empirical cdf vs fitted cdf's
+l<-length(sorted.log.FloodInsurance)
+ecdfPlot(sorted.log.FloodInsurance, ecdf.lwd = 1, main = "Cumulative Distribution Function", xlab =
+           "log(claims)")
+fitted_gamma <- sapply(X = seq(min(log.FloodInsurance),max(log.FloodInsurance),length=l), gamma_fit_cdf)
+lines(x = seq(min(log.FloodInsurance),max(log.FloodInsurance),length=l), y = fitted_gamma, col = "blue")
+fitted_weibull <- sapply(X = seq(min(log.FloodInsurance),max(log.FloodInsurance),length=l), weibull_fit_cdf)
+lines(x = seq(min(log.FloodInsurance),max(log.FloodInsurance),length=l), y = fitted_weibull, col = "cadetblue")
+fitted_normal <- sapply(X = seq(min(log.FloodInsurance),max(log.FloodInsurance),length=l), normal_fit_cdf)
+lines(x = seq(min(log.FloodInsurance),max(log.FloodInsurance),length=l), y = fitted_normal, col = "deepskyblue")
+
+fitted_logistic <- sapply(X = seq(min(log.FloodInsurance),max(log.FloodInsurance),length=l), logistic_fit_cdf)
+lines(x = seq(min(log.FloodInsurance),max(log.FloodInsurance),length=l), y = fitted_logistic, col = "lightblue")
+
+legend("bottomright", c("Empirical","Gamma fit", "Weibull fit","Normal fit","Logistic fit"), fill=c("black","blue","cadetblue",
+                                                                                     "deepskyblue","lightblue"))
+# Graph of empirical vs fitted lev's
+plot(elev(sorted.log.FloodInsurance), type="l", xlab="u", ylab="LEV(u)", main="LEV")
+fitted_gamma <- sapply(X = seq(min(log.FloodInsurance),max(log.FloodInsurance),length=l), lev_gamma)
+lines(x = seq(min(log.FloodInsurance),max(log.FloodInsurance),length=l), y = fitted_gamma, col = "blue")
+fitted_weibull <- sapply(X = seq(min(log.FloodInsurance),max(log.FloodInsurance),length=l), lev_weibull)
+lines(x = seq(min(log.FloodInsurance),max(log.FloodInsurance),length=l), y = fitted_weibull, col = "cadetblue")
+fitted_normal <- sapply(X = seq(min(log.FloodInsurance),max(log.FloodInsurance),length=l), lev_normal)
+lines(x = seq(min(log.FloodInsurance),max(log.FloodInsurance),length=l), y = fitted_normal, col = "deepskyblue")
+
+fitted_logistic <- sapply(X = seq(min(log.FloodInsurance),max(log.FloodInsurance),length=l), lev_logistic)
+lines(x = seq(min(log.FloodInsurance),max(log.FloodInsurance),length=l), y = fitted_logistic, col = "lightblue")
+
+
+legend("bottomright", c("Empirical","Gamma fit", "Weibull fit","Normal fit","Logistic fit"), fill=c("black","blue","cadetblue",
+                                                                                                    "deepskyblue","lightblue"))
+
+# Graph of empirical vs fitted mrl's
+plot(x=sorted.log.FloodInsurance,y=emrl(sorted.log.FloodInsurance), type="l", xlab= "d", ylab="e(d)", main ="MRL")
+fitted_gamma <- sapply(X = seq(min(log.FloodInsurance),max(log.FloodInsurance),length=l), mrl_gamma)
+lines(x = seq(min(log.FloodInsurance),max(log.FloodInsurance),length=l), y = fitted_gamma, col = "blue")
+fitted_weibull <- sapply(X = seq(min(log.FloodInsurance),max(log.FloodInsurance),length=l), mrl_weibull)
+lines(x = seq(min(log.FloodInsurance),max(log.FloodInsurance),length=l), y = fitted_weibull, col = "cadetblue")
+fitted_normal <- sapply(X = seq(min(log.FloodInsurance),max(log.FloodInsurance),length=l), mrl_normal)
+lines(x = seq(min(log.FloodInsurance),max(log.FloodInsurance),length=l), y = fitted_normal, col = "deepskyblue")
+
+fitted_logistic <- sapply(X = seq(min(log.FloodInsurance),max(log.FloodInsurance),length=l), mrl_logistic)
+lines(x = seq(min(log.FloodInsurance),max(log.FloodInsurance),length=l), y = fitted_logistic, col = "lightblue")
+
+
+legend("bottomright", c("Empirical","Gamma fit", "Weibull fit","Normal fit","Logistic fit"), fill=c("black","blue","cadetblue",
+                                                                                     "deepskyblue","lightblue"))
+# Gamma model
+gamma_fit_parameters <- gamma_fit$estimate
+cdf_gamma <- sort(pgamma(log.FloodInsurance,shape = gamma_fit_parameters[1],rate =
+                           gamma_fit_parameters[2]))
+n <- length(log.FloodInsurance)
+#PP plot for gamma
+p <- (1 : n) / n - 0.5 / n #empirical CDF
+plot(x=p,y=cdf_gamma, main="Gamma P-P Plot", xlab ="Empirical CDF", ylab = "Gamma CDF")
+lines(x=p,y=p,col="blue")
+legend("bottomright", c("(Fn, F_Fitted)","X = Y"), cex=0.9, fill=c("black","blue"))
+
+#QQ plot for gamma
+gamma_quantile_fitted <- vector()
+for (i in 1:n){
+  gamma_quantile_fitted[i] = qgamma(i/(n+1),shape = gamma_fit_parameters[1],rate =
+                                      gamma_fit_parameters[2])
+}
+plot(x=sorted.log.FloodInsurance,y=gamma_quantile_fitted, main="Gamma Q-Q Plot", xlab="Empirical Percentile",
+     ylab="Gamma
+Percentile" )
+lines(x=sorted.log.FloodInsurance,y=sorted.log.FloodInsurance,col = "blue")
+legend("bottomright", c("(Empirical Percentile,Gamma Percentile)","X = Y"), cex=0.9,
+       fill=c("black","blue"))
+
+# Weibull model
+WB_fit <- fitdist(log.FloodInsurance,"weibull")
+WB_fit_parameters <- WB_fit$estimate
+cdf_WB <- sort(pweibull(log.FloodInsurance,shape = WB_fit_parameters[1],scale = WB_fit_parameters[2]))
+n <- length(log.FloodInsurance)
+#PP plot for Weibull
+p <- (1 : n) / n - 0.5 / n #empirical CDF
+plot(x=p,y=cdf_WB, main="Weibull P-P Plot",xlab ="Empirical CDF", ylab = "Weibull CDF")
+lines(x=p,y=p,col="cadetblue")
+legend("bottomright", c("(Fn, F_Fitted)","X = Y"), cex=0.9, fill=c("black","cadetblue"))
+#QQ plot for Weibull
+WB_quantile_fitted <- vector()
+for (i in 1:n){
+  WB_quantile_fitted[i] = qweibull(i/(n+1),shape = WB_fit_parameters[1],scale =
+                                     WB_fit_parameters[2])
+}
+plot(x=sorted.log.FloodInsurance,y=WB_quantile_fitted,main="Weibull Q-Q Plot",xlab ="Empirical Percentile", ylab
+     = "Weibull
+Percentile")
+lines(x=sorted.log.FloodInsurance,y=sorted.log.FloodInsurance,col = "cadetblue")
+legend("bottomright", c("(Empirical Percentile,Weibull Percentile)","X = Y"), cex=0.9,
+       fill=c("black","cadetblue"))
+
+#Normal model
+normal_fit_parameters <- normal_fit$estimate
+cdf_normal <- sort(pnorm(log.FloodInsurance,mean = normal_fit_parameters[1],sd =
+                           normal_fit_parameters[2]))
+n <- length(log.FloodInsurance)
+#PP plot for normal
+p <- (1 : n) / n - 0.5 / n #empirical CDF
+plot(x=p,y=cdf_normal, main="Normal P-P Plot", xlab ="Normal Empirical CDF", ylab = "Normal CDF")
+lines(x=p,y=p,col="deepskyblue")
+legend("bottomright", c("(Fn, F_Fitted)","X = Y"), cex=0.9, fill=c("black","deepskyblue"))
+#QQ plot for normal
+normal_quantile_fitted <- vector()
+for (i in 1:n){
+  normal_quantile_fitted[i] = qnorm(i/(n+1),mean = normal_fit_parameters[1],sd =
+                                      normal_fit_parameters[2])
+}
+plot(x=sorted.log.FloodInsurance,y=normal_quantile_fitted, main="Normal Q-Q Plot", xlab="Empirical Percentile",
+     ylab="Normal
+Percentile" )
+lines(x=sorted.log.FloodInsurance,y=sorted.log.FloodInsurance,col = "deepskyblue")
+legend("bottomright", c("(Empirical Percentile,Normal Percentile)","X = Y"), cex=0.9,
+       fill=c("black","deepskyblue"))
+
+#Lognormal model
+lognormal_fit_parameters <- lognormal_fit$estimate
+cdf_lognormal <- sort(plnorm(log.FloodInsurance,meanlog = lognormal_fit_parameters[1],sdlog =
+                              lognormal_fit_parameters[2]))
+n <- length(log.FloodInsurance)
+#PP plot for lognormal
+p <- (1 : n) / n - 0.5 / n #empirical CDF
+plot(x=p,y=cdf_lognormal, main="Lognormal P-P Plot", xlab ="Empirical CDF", ylab = "lognormal CDF")
+lines(x=p,y=p,col="dodgerblue")
+legend("bottomright", c("(Fn, F_Fitted)","X = Y"), cex=0.9, fill=c("black","dodgerblue"))
+#QQ plot for lognormal
+lognormal_quantile_fitted <- vector()
+for (i in 1:n){
+  lognormal_quantile_fitted[i] = qlnorm(i/(n+1),meanlog = lognormal_fit_parameters[1],sdlog =
+                                         lognormal_fit_parameters[2])
+}
+plot(x=sorted.log.FloodInsurance,y=lognormal_quantile_fitted, main="Lognromal Q-Q Plot", xlab="Empirical Percentile",
+     ylab="lognormal
+Percentile" )
+lines(x=sorted.log.FloodInsurance,y=sorted.log.FloodInsurance,col = "dodgerblue")
+legend("bottomright", c("(Empirical Percentile,lognormal Percentile)","X = Y"), cex=0.9,
+       fill=c("black","dodgerblue"))
+
+
+#Logistic model
+logistic_fit_parameters <- logistic_fit$estimate
+cdf_logistic <- sort(plogis(log.FloodInsurance,location = logistic_fit_parameters[1],scale =
+                              logistic_fit_parameters[2]))
+n <- length(log.FloodInsurance)
+#PP plot for Logistic
+p <- (1 : n) / n - 0.5 / n #empirical CDF
+plot(x=p,y=cdf_logistic, main="Logistic P-P Plot", xlab ="Empirical CDF", ylab = "logistic CDF")
+lines(x=p,y=p,col="lightblue")
+legend("bottomright", c("(Fn, F_Fitted)","X = Y"), cex=0.9, fill=c("black","lightblue"))
+#QQ plot for Logistic
+logistic_quantile_fitted <- vector()
+for (i in 1:n){
+  logistic_quantile_fitted[i] = qlogis(i/(n+1),location = logistic_fit_parameters[1],scale =
+                                         logistic_fit_parameters[2])
+}
+plot(x=sorted.log.FloodInsurance,y=logistic_quantile_fitted, main="Logistic Q-Q Plot", xlab="Empirical Percentile",
+     ylab="logistic
+Percentile" )
+lines(x=sorted.log.FloodInsurance,y=sorted.log.FloodInsurance,col = "lightblue")
+legend("bottomright", c("(Empirical Percentile,logistic Percentile)","X = Y"), cex=0.9,
+       fill=c("black","lightblue"))
+
+#summary stats of fitted gamma
+gamma_fit_parameters
+gamma.shape<-gamma_fit_parameters[1]
+gamma.rate<-gamma_fit_parameters[2]
+gquartile_1 <- qgamma(0.25,shape = gamma_fit_parameters[1],rate = gamma_fit_parameters[2])
+gquartile_1
+gquartile_3 <- qgamma(0.75,shape = gamma_fit_parameters[1],rate = gamma_fit_parameters[2])
+gquartile_3
+gpercentile_0.05 <- qgamma(0.05,shape = gamma_fit_parameters[1],rate =
+                             gamma_fit_parameters[2])
+gpercentile_0.05
+gpercentile_0.10 <- qgamma(0.10,shape = gamma_fit_parameters[1],rate =
+                             gamma_fit_parameters[2])
+gpercentile_0.10
+gpercentile_0.90 <- qgamma(0.90,shape = gamma_fit_parameters[1],rate =
+                             gamma_fit_parameters[2])
+gpercentile_0.90
+gpercentile_0.95 <- qgamma(0.95,shape = gamma_fit_parameters[1],rate =
+                             gamma_fit_parameters[2])
+gpercentile_0.95
+gmedian <- qgamma(0.50,shape = gamma_fit_parameters[1],rate = gamma_fit_parameters[2])
+gmedian
+gmean <- gamma_fit_parameters[1]/gamma_fit_parameters[2]
+gmean
+gstd <- sqrt(gamma_fit_parameters[1]/(gamma_fit_parameters[2])^2)
+gstd
+gvar<-gstd^2
+gvar
+
+gcoeff_var <- gstd/gmean
+gcoeff_var
+gskew <- 2/sqrt(gamma_fit_parameters[1])
+gskew
+gkurt <- 3+6/(gamma_fit_parameters[1])
+gkurt
+
+
+#summary stats of fitted weibull
+WB_fit_parameters
+weibull.shape<-WB_fit_parameters[1]
+weibull.scale<-WB_fit_parameters[2]
+
+wquartile_1 <- qweibull(0.25,shape = WB_fit_parameters[1],scale = WB_fit_parameters[2])
+wquartile_1
+wquartile_3 <- qweibull(0.75,shape = WB_fit_parameters[1],scale = WB_fit_parameters[2])
+wquartile_3
+wpercentile_0.05 <- qweibull(0.05,shape = WB_fit_parameters[1],scale = WB_fit_parameters[2])
+wpercentile_0.05
+wpercentile_0.10 <- qweibull(0.10,shape = WB_fit_parameters[1],scale = WB_fit_parameters[2])
+wpercentile_0.10
+wpercentile_0.90 <- qweibull(0.90,shape = WB_fit_parameters[1],scale = WB_fit_parameters[2])
+wpercentile_0.90
+wpercentile_0.95 <- qweibull(0.95,shape = WB_fit_parameters[1],scale = WB_fit_parameters[2])
+wpercentile_0.95
+wmedian <- qweibull(0.50,shape = WB_fit_parameters[1],scale = WB_fit_parameters[2])
+wmedian
+k = WB_fit_parameters[1] # shape parameter
+lambda = WB_fit_parameters[2] # scale parameter
+Wmean = lambda*gamma(1 + (1/k)) # Mean
+Wmean
+Wvar = (lambda^2)*(gamma(1+(2/k)) - (gamma(1+(1/k)))^2); # Variance
+Wvar
+WStaDev = (Wvar^0.5)
+WStaDev
+wcoeff_var <- WStaDev/Wmean
+wcoeff_var
+wskew = (gamma(1+(3/k))*(lambda^3)-3*(Wmean)*(Wvar)-(Wmean^3))/(WStaDev^3)
+wskew
+wkurt =
+  ((lambda^4)*gamma(1+(4/k))-4*(wskew)*(WStaDev^3)*(Wmean)-6*(Wmean^2)*(WStaDev^2)-(
+    Wmean^4))/(WStaDev^4) 
+wkurt
+
+#summary stats of fitted normal
+norm.mean<-normal_fit_parameters[1]
+norm.sd<-normal_fit_parameters[2]
+
+nquartile_1 <- qnorm(0.25,mean = normal_fit_parameters[1],sd = normal_fit_parameters[2])
+nquartile_1
+nquartile_3 <- qnorm(0.75,mean = normal_fit_parameters[1],sd = normal_fit_parameters[2])
+nquartile_3
+npercentile_0.05 <- qnorm(0.05,mean = normal_fit_parameters[1],sd = normal_fit_parameters[2])
+npercentile_0.05
+npercentile_0.10 <- qnorm(0.10,mean = normal_fit_parameters[1],sd = normal_fit_parameters[2])
+npercentile_0.10
+npercentile_0.90 <- qnorm(0.90,mean = normal_fit_parameters[1],sd = normal_fit_parameters[2])
+npercentile_0.90
+npercentile_0.95 <- qnorm(0.95,mean = normal_fit_parameters[1],sd = normal_fit_parameters[2])
+npercentile_0.95
+nmedian <- qnorm(0.50,mean = normal_fit_parameters[1],sd = normal_fit_parameters[2])
+nmedian
+nmean <- normal_fit_parameters[1]
+nmean
+nstd <-normal_fit_parameters[2]
+nstd
+nvar<-nstd^2
+nvar
+ncoeff_var <- nstd/nmean
+ncoeff_var
+nskew <- 0
+nskew
+nkurt <- 3
+nkurt
+
+#Summary stats of fitted lognormal
+meanlog<-lognormal_fit_parameters[1]
+sdlog<-lognormal_fit_parameters[2]
+lnquartile_1 <- qlnorm(0.25,meanlog = lognormal_fit_parameters[1],sdlog =lognormal_fit_parameters[2])
+lnquartile_1
+lnquartile_3 <- qlnorm(0.75,meanlog = lognormal_fit_parameters[1],sdlog =lognormal_fit_parameters[2])
+lnquartile_3
+lnpercentile_0.05 <- qlnorm(0.05,meanlog = lognormal_fit_parameters[1],sdlog =lognormal_fit_parameters[2])
+lnpercentile_0.05
+lnpercentile_0.10 <- qlnorm(0.10,meanlog = lognormal_fit_parameters[1],sdlog =lognormal_fit_parameters[2])
+lnpercentile_0.10
+lnpercentile_0.90 <- qlnorm(0.90,meanlog = lognormal_fit_parameters[1],sdlog =lognormal_fit_parameters[2])
+lnpercentile_0.90
+lnpercentile_0.95 <- qlnorm(0.95,meanlog = lognormal_fit_parameters[1],sdlog =lognormal_fit_parameters[2])
+lnpercentile_0.95
+lnmedian <- qlnorm(0.50,meanlog = lognormal_fit_parameters[1],sdlog =lognormal_fit_parameters[2])
+lnmedian
+lnmean <- exp(lognormal_fit_parameters[1]+lognormal_fit_parameters[2]^2/2)
+lnmean
+lnvar<-(exp(lognormal_fit_parameters[2]^2-1)*exp(2*lognormal_fit_parameters[1]+lognormal_fit_parameters[2]))
+lnvar
+lnsd<-lnvar^0.5
+lnsd
+lncv<-lnsd/lnmean
+lncv
+lnskew<-(exp(sdlog)+2)*sqrt(exp(sdlog^2)-1)
+lnkurt<-exp(4*sdlog^2)+2*exp(3*sdlog^2)+3*exp(2*sdlog^2)-6
+lnkurt
+
+#Summary stats of fitted logistic
+logistic_fit_parameters
+location.logis<-logistic_fit_parameters[1]
+scale.logis<-logistic_fit_parameters[2]
+logisquartile_1 <- qlogis(0.25,location = logistic_fit_parameters[1],scale =logistic_fit_parameters[2])
+logisquartile_1
+logisquartile_3 <- qlogis(0.75,location = logistic_fit_parameters[1],scale =logistic_fit_parameters[2])
+logisquartile_3
+logispercentile_0.05 <- qlogis(0.05,location = logistic_fit_parameters[1],scale =logistic_fit_parameters[2])
+logispercentile_0.05
+logispercentile_0.10 <- qlogis(0.10,location = logistic_fit_parameters[1],scale =logistic_fit_parameters[2])
+logispercentile_0.10
+logispercentile_0.90 <- qlogis(0.90,location = logistic_fit_parameters[1],scale =logistic_fit_parameters[2])
+logispercentile_0.90
+logispercentile_0.95 <- qlogis(0.95,location = logistic_fit_parameters[1],scale =logistic_fit_parameters[2])
+logispercentile_0.95
+logismedian <- qlogis(0.50,location = logistic_fit_parameters[1],scale =logistic_fit_parameters[2])
+logismedian
+logismean <- location.logis
+logismean
+logisvar <- scale.logis^2*location.logis^2/3
+logisvar
+logissd<-logisvar^0.5
+logissd
+logiscv<-logismean/logissd
+logiscv
+logis.skew<-0
+logis.skew
+logis.kurt<-6/5
+logis.Kurt
+
+#Anderson-Darling test
+ad.test(log.FloodInsurance,pgamma, gamma.shape,gamma.rate)
+ad.test(log.FloodInsurance,pweibull, weibull.shape,weibull.scale)
+ad.test(log.FloodInsurance,pnorm, norm.mean,norm.sd)
+ad.test(log.FloodInsurance,plnorm,meanlog,sdlog)
+ad.test(log.FloodInsurance,plogis,location.logis,scale.logis)
+
+#Kolmogorov-Smirnov Tests
+ks.test(log.FloodInsurance,pgamma, gamma.shape,gamma.rate)
+ks.test(log.FloodInsurance,pweibull, weibull.shape,weibull.scale)
+ks.test(log.FloodInsurance,pnorm, norm.mean,norm.sd)
+ks.test(log.FloodInsurance,plnorm,meanlog,sdlog)
+ks.test(log.FloodInsurance,plogis,location.logis,scale.logis)
+
+
+
+
+###REPORT DATA EXTRACTION
+
+##Sample Statistics of the Claims
+base.data.parameters<-c(mean(Base.FloodInsurance),var(Base.FloodInsurance),sd(Base.FloodInsurance),cv(Base.FloodInsurance),skew(Base.FloodInsurance),kurt(Base.FloodInsurance),min(Base.FloodInsurance),max(Base.FloodInsurance),quantile(Base.FloodInsurance,0.5))
+log.data.parameters<-c(mean(log.FloodInsurance),var(log.FloodInsurance),sd(log.FloodInsurance),cv(log.FloodInsurance),skew(log.FloodInsurance),kurt(log.FloodInsurance),min(log.FloodInsurance),max(log.FloodInsurance),quantile(log.FloodInsurance,0.5))
+
+raw.data.parameters<-data.frame(base.data.parameters,log.data.parameters)
+rownames(raw.data.parameters)<-c("mean","var","sd","cv","skew","kurt","min","max","median")
+raw.data.parameters
+write.xlsx(raw.data.parameters,file='/Users/cheng/Documents/report_data.xlsx',sheetName='Parameters')
+##Percentiles
+base.quantile<-quantile(Base.FloodInsurance, c(0.05, 0.1, 0.25, 0.5, 0.75, 0.9,0.95))
+log.quantile<- quantile(log.FloodInsurance, c(0.05, 0.1, 0.25, 0.5, 0.75, 0.9,0.95))
+Percentile.df<-data.frame(base.quantile ,log.quantile)
+Percentile.df
+write.xlsx(Percentile.df,file='/Users/cheng/Documents/report_data.xlsx',append=TRUE,sheetName="Percentiles")
+##Claim Amounts Plots
+par(mfrow=c(1,2))
+plot(Base.FloodInsurance,main="Scatter Plot of Original Claim Amounts")
+plot(log.FloodInsurance,main="Scatter Plot of Log-Transformed Claim Amounts")
+write.xlsx()
+
+##Claim histogram 
+
+hist (Base.FloodInsurance,
+      main="Histogram for Amount", xlab="Amount",las=1)
+hist (log.FloodInsurance, prob=T, breaks=seq(from=2, to =15, by=0.5),xlim=c(2,15), main="Histogram for Logged
+Amount", xlab="Amount",las=1)
+
+#MRL
+plot(sorted.log.FloodInsurance,amount.mrl,type="l",xlab="Claims",ylab="Mean Excess",main="Logged Empirical
+MRL")
+amount.base.mrl<-emrl(sorted.Base.FloodInsurance)
+plot(sorted.Base.FloodInsurance,amount.base.mrl,type="l",xlab="Claims",ylab="Mean Excess",main="Base Empirical
+MRL")
+
+
+##IID tests
+par(mfrow=c(1,1))
+plot(iid_test)
+
+#Ljung-box test
+test1
+test2
+test3
+
+#fit Parameters
+normal_fit_parameters
+gamma_fit_parameters
+WB_fit_parameters
+logistic_fit_parameters
+
+gamma_fit_mme
+normal_fit_mme
+weibull_fit_mme
+logistic_fit_mme
+
+#Covariacne matrix
+gamma_cov
+normal_cov
+weibull_cov
+logistic_cov
+
+#empirical vs estimated fits
+
+plot(normal_fit)
+plot(gamma_fit)
+plot(weibull_fit)
+plot(logistic_fit)
+
+hist(sorted.log.FloodInsurance,prob=TRUE, main="Empirical vs Theoretical Densities",xlab="Log Transformed Claim Data")
+curve(dgamma(x,gamma_fit_parameters[1],gamma_fit_parameters[2]),col='blue',lwd=2,add=T)
+curve(dweibull(x,WB_fit_parameters[1],WB_fit_parameters[2]),col='cadetblue',lwd=2,add=T)
+curve(dnorm(x,mean=normal_fit_parameters[1],sd=normal_fit_parameters[2]),col='deepskyblue',lwd=2,add=T)
+curve(dgamma(x,logistic_fit_parameters[1],logistic_fit_parameters[2]),col='lightblue',lwd=2,add=T)
+legend("bottomright", c("Empirical","Gamma fit", "Weibull fit","Normal fit","Logistic fit"), fill=c("black","blue","cadetblue",
+                                                                                     "deepskyblue","lightblue"))
+log.data.parameters
